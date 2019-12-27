@@ -127,3 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+notebooks/map-parser/output/
+notebooks/map-parser/tmp/
