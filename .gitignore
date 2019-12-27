@@ -131,3 +131,8 @@ dmypy.json
 
 notebooks/map-parser/output/
 notebooks/map-parser/tmp/
+notebooks/.config
+notebooks/.ipython
+notebooks/.jupyter
+notebooks/.local
+**.bash_history**
