@@ -4,6 +4,28 @@ from shapely.geometry import Polygon, box, MultiPolygon
 from tqdm.notebook import tqdm
 import shapely.ops
 
+class Territory :
+    def __init__(self, color, polygon):
+        assert color is None or isinstance(color, (list, np.ndarray))
+        assert isinstance(polygon, Polygon)
+        if color is None:
+            color = np.random.rand(3)
+        self.color = np.array(color)
+        self.polygon = polygon
+        
+    def partially_covered_by(self, surface):
+        if not surface.is_valid:
+            surface = surface.buffer(0)
+        if not surface.is_valid:
+            raise Exception("ca marche toujours pas")
+            
+        return self.polygon.intersection(surface).area> .2* self.polygon.area
+
+    def roughly_same_as(self, other_territory):
+        intersection_area = self.polygon.intersection(other_territory.polygon).area
+        return intersection_area > .9*self.polygon.area and intersection_area > .9* other_territory.polygon.area
+
+
 def colour_distance(rgb1, rgb2):
     [[lab1, lab2]] = skimage.color.rgb2lab([[rgb1, rgb2]])
     return np.linalg.norm(lab1 - lab2)
@@ -56,14 +78,17 @@ def extract_territories_by_color(clustered_image, colors_on_cluster, ignored_col
     grayscale_map = skimage.color.rgb2gray(clustered_image)
     mask_all = [grayscale_map==gray_color for gray_color in relevant_colors_in_gray]
     mask_all = [skimage.filters.median(mask, selem=np.ones((3, 3))) for mask in mask_all]
-    polygons = np.concatenate([get_polygons(mask) for mask in mask_all])
-    polygons = [pol for pol in polygons if pol.area >60]
-    polygons = [pol for pol in polygons if pol.area/pol.length >2]
-    polygons = [pol for pol in polygons if pol.area < clustered_image.shape[0]*clustered_image.shape[1]*.95 ]
-    other_pols = lambda pol : [p for p in polygons if p is not pol]
-    polygons = [pol for pol in polygons 
-                if not is_contained(pol,other_pols(pol))]
-    return polygons
+    territories = []
+    for i, mask in enumerate(mask_all):
+        territories = territories + [Territory(relevant_colors[i], p) for p in get_polygons(mask)]
+    
+    territories = [t for t in territories if t.polygon.area >60]
+    territories = [t for t in territories if t.polygon.area/t.polygon.length >2]
+    territories = [t for t in territories if t.polygon.area < clustered_image.shape[0]*clustered_image.shape[1]*.95 ]
+    other_polygons = lambda t : [o.polygon for o in territories if o is not t]
+    territories = [t for t in territories 
+                if not is_contained(t.polygon,other_polygons(t))]
+    return territories
 
 
 def extract_color_and_mask(img, polygon):
@@ -102,8 +127,8 @@ def remove_contained(atomic_polygons):
 
 
 def split_territory(territory_color, masked_img):
-    edges = skimage.feature.canny(skimage.color.rgb2gray(masked_img))
-    fat_edges = skimage.morphology.dilation(edges, skimage.morphology.disk(2))
+    edges = skimage.feature.canny(skimage.color.rgb2gray(masked_img), sigma=.5)
+    fat_edges = skimage.morphology.dilation(edges, skimage.morphology.disk(1))
     inner_polygons = [p for p in get_polygons(fat_edges) if p.area > 60]
     if len(inner_polygons) > 1:
         inner_polygons_atomic = remove_wrapper_polygons(inner_polygons)
@@ -117,14 +142,18 @@ def split_territory(territory_color, masked_img):
 def extract_territories_by_gradient(territories, original_image, show_progress=True):
     res = []
     if show_progress :
-        territories = tqdm(territories)
-    for pol in territories:
-        color, masked = extract_color_and_mask(original_image, pol)
-        inner_territories = split_territory(color, masked)
-        if len(inner_territories) > 1:
-            for terr in inner_territories:
-                res.append((color, terr))
+        territories = tqdm(territories, desc="extract territories by gradient")
+    for territory in territories:
+        color, masked = extract_color_and_mask(original_image, territory.polygon)
+        inner_polygons = split_territory(color, masked)
+        if len(inner_polygons) > 1:
+            for pol in inner_polygons:
+                res.append(Territory(color, pol))
         else:
-            res.append((color, pol))
-    return np.array(res)
+            res.append(territory)
+    return res
     
+def color_analysis(image, ignored_colors):
+    clustered_img, major_colors = regroup_img_colors(image)
+    territories_by_color = extract_territories_by_color(clustered_img, major_colors, ignored_colors)
+    return territories_by_color

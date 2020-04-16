@@ -1,15 +1,17 @@
 import json
 from shapely.geometry import mapping, shape
+from map_parsing import Territory
 
-def save_results(results, filename):
-    serializable_results = [
+def save_territories(territories, filename):
+    serializable_territories = [
         {
-            "color" : list(col.astype(float)),
-            "polygon" : mapping(pol)
-        } for col,pol in results
+            "color" : list(t.color.astype(float)),
+            "polygon" : mapping(t.polygon)
+        } for t in territories
     ]
-    json.dump(serializable_results, open(filename, 'w'))
+    json.dump(serializable_territories, open(filename, 'w'))
 
-def load_results(filename):
+
+def load_territories(filename):
     data = json.load(open(filename, 'r'))
-    return [(datum['color'], shape(datum['polygon'])) for datum in data]
+    return [Territory(datum['color'], shape(datum['polygon'])) for datum in data]
