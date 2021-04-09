@@ -1,0 +1,5 @@
+moviepy===1.0.3
+opencv-python===4.5.1.48
+pytesseract===0.3.7
+Shapely===1.7.1
+mpld3===0.5.2
